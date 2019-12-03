@@ -1,0 +1,183 @@
+JazNetsDocs
+JazNets Module Documentation
+Eli Pollock, MIT Brain and Cognitive Sciences
+
+
+Here is a list of things you will find in this module. I will list the file with a brief description, and under that list the functions/classes/methods contained in each.
+
+JazNet.py: Main script of the module
+	p = create_parameters(dt=0.001)
+	Use this function to define hyperparameters for any RNN instantiation. You can create an "override" script to 
+	edit any individual parameters, but simply calling this function suffices. Use the output dictionary to 
+	instantiate an RNN class.
+
+
+	rnn = RNN(p,num_inputs,num_outputs)
+	Creates an RNN object. Relevant methods:
+		__init___:  Creates attributes for hyperparameters, network parameters, and initial activity
+			Initialize the network
+			Inputs:
+				hyperparameters: should be output of create_parameters function, changed as needed
+				num_inputs: number of inputs into the network
+				num_outputs: number of outputs the network has
+			Outputs:
+				self.p: Assigns hyperparameters to an attribute
+				self.rnn_par: Creates parameters for network that can be optimized (all weights and node biases)
+				self.act: Initializes the activity of the network					
+
+
+		initialize_act:  Resets the activity, controlled by p['init_act_scale']
+			Any time you want to reset the activity of the network to low random values
+
+		run:  Runs the network forward given some input
+			Use this method to run the RNN on some inputs
+			Inputs:
+				inputs: An Nxm array, where m is the number of separate inputs and N is the number of time steps
+				record_flag: If set to 0, the function only records the output node activity
+					If set to 1, if records that and the activity of every hidden node over time
+			Outputs:
+				output_whole: An Nxk array, where k is the number of separate outputs and N is the number of time steps
+				activity_whole: Either an empty array if record_flag=0, or an NxQ array, where Q is the number of hidden units
+
+		train: Uses one of several algorithms to train the network.
+			Use this method to train the RNN using one of several training algorithms!
+			Inputs:
+				inps_and_targs: This should be a FUNCTION that randomly produces a training input and a target function
+								Those should have individual inputs/targets as columns and be the first two outputs 
+								of this function. Should also take a 'dt' argument.
+				algorithm: Which training algorithm would you like to use? Options are:
+					'full-FORCE': as seen in DePasquale 2017
+								This function uses a recursive least-squares algorithm to optimize the network.
+								Note that after each batch, the function shows an example output as well as recurrent unit activity.
+								Parameters: 
+								In self.p, the parameters starting with ff_ control this function. 
+								*****NOTE***** The function inps_and_targs must have a third output of "hints" for training.
+								If you don't want to use hints, replace with a vector of zeros (Nx1)
+					'grad': stochastic gradient descent using autograd
+								Parameters: 
+								In self.p, the parameters starting with grad_ control this function.
+				monitor_training: Collect useful statistics and show at the end
+				**kwargs: use to pass things to the inps_and_targs function
+			Outputs:
+				Nothing explicitly, but the weights of self.rnn_par are optimized to map the inputs to the targets
+		test: Function that tests a trained network. Relevant parameters in p start with 'test'
+			Inputs:
+				Inps_and_targ: function used to generate time series (same as in train)
+				**kwargs: arguments passed to inps_and_targs
+
+
+Dynamics.py: Script with functions for analyzing the dynamics of the JazNet
+	
+	fixed_points: Function for finding fixed points
+		This function uses the trained parameters to find num_points fixed points. It does a gradient
+	    descent to minimize q(x), which is analagous to the energy of the system. To just plot the gradient descent loss
+	    and step size for finding a single fixed point, set the plot_loss flag to 1.
+	    Inputs:
+	        rnn: 		Should be a JazNet class object.
+	        inp: 		A fixed value for the input(s). Can just be a list (e.g. [1,0])
+	        num_points: Number of points to find (if plot_loss=0)
+	        eps: 		Epsilon value that scales the step size
+	        opt_iters: 	How many iterations to run to try to converge on a fixed point
+	        thresh: 	Threshold for the norm of the network activity before calling it a fixed point
+	        max_tries:  Number of attempts to make for finding a fixed point. Prevents getting stuck in an infinite loop.
+	        rand_init: 	Randomly pick a starting point if 1 (default), otherwise go with the network's current activity.
+	        init_scale: Relevant if rand_init==1. Scales the randomly initialized activity of the network.
+	        plot_loss: 	Will result in only finding one fixed point. Shows how loss function/step size changes. Default 0
+
+	    Outputs:
+	        all_points: 	Gives activity for all fixed points found in a num_points-by-N array
+	        fp_outputs: 	Network output at each fixed point. Note: Should change this depending on
+	            			whether network uses tanh of activities for outpus, or if it has biases.
+	        trajectories: 	List with num_points elements, where each element is a TxN array, where T is the number of steps
+	        				it took to find the fixed point and N is the number of neurons. 
+
+
+	****** NOT MADE YET*************
+	field_flow: Function for showing trajectories through statespace.
+		The function will start the RNN at points making a 2- or 3-D grid in state space, given the parameters for the grid and the pca object
+
+		Inputs:
+			rnn:  		JazNet trained on a task
+			pca:  		A pca object from matplotlib.mlab
+			pc_mins: 	Either a 2 or 3 element list with the minimum values for each PC to start at
+			pc_maxes: 	Max values of PCs
+			pc_steps: 	Number of steps between max and mins (also a 2 or 3 element list)
+			input:		Fixed value for inputs to the network
+			tsteps: 	Number of steps to go forward
+			fig_handle: A figure handle. Default is empty, and it will create a new figure.
+		Outputs:
+			Just a plot
+
+Tasks.py: Script with functions that give time series for common tasks.
+	RSG: Ready-set-go task
+		Generates time series for RSG task. Will randomly generate time series based ts_min and ts_max
+	    Inputs:
+	    	dt:			Time step (default 0.001)
+	    	ts_min:		Minimum sample interval time (for random selection)
+	    	ts_max:		Maximum ""
+	    	ts_time:	Define the sample interval by hand
+	    	iti_time:	Inter-trial interval. Goes at the end of the time series
+	    	showplots:	If 1, creates a plot showing target, inputs, and hints
+
+	    Outputs:
+	    	inp:		For input into network
+	    	targ:		Target output
+	    	hints: 		Hints for full-FORCE training
+	    	ts_time:	The sample interval. Useful for keeping track of what gets randomly generated
+
+	RHY: Rhythm replication task
+		Generates time series for rhythm replication. Rhythms can be specified with ints (short for intervals), or randomly selected using n_ints. By default, the random selection will generate rhythms with integer-ratioed intervals, with either 1, 2, or 3 beats in between each tap.
+		Inputs:
+			dt:			Time step (default 0.001)
+			ints:		List containing the lengths (in seconds) of the intervals for the rhythm. Default empty.
+			tw:         Trigger wait. Time between the last tap and the trigger. Random if empty (default)
+			n_ints:		Number of intervals to randomly generate, if you leave ints blank. Default 0.
+			cont:		If 1, draw intervals from a continuous uniform distribution. Default 0
+			showplots: 	If 1, creates a plot showing target, inputs, and hints
+
+		Outputs:
+			inp:		For input into network. Will have two columns (rhythm and trigger)
+			targ: 		Target output. Four columns (one for each tap)
+			hints:		Hints for full-FORCE training. Three columns (one for each interval)
+			t:			A time vector (useful for plotting).
+
+	WMR: Working memory task
+		Generates time series for the Working Memory Ring task. Network must remember a stimulus that lies on a ring, and 
+    reproduce it at a specified time.
+        Inputs:
+            dt:         Time step (default 0.001)
+            theta:      Angle of stimulus. Should be between -pi and pi. Randomly generated if not specified
+            delay_time: How long to hold the interval in memory. If not specified, randomly generated.
+            delay_max:  Used to randomly generate a delay
+            delay_min:  Same.
+            showplots:  If 1, creates a plot showing target, inputs, and hints
+            prior:      Specifies type of distribution from which theta is drawn.
+                        'uniform': Default, uniform from -pi to pi
+                        'four':    Mixture of 4 Gaussians between -pi and pi, periodic BCs
+                        'six':     Same as above, but with 6 slightly narrower Gaussians
+            algorithm:  Specify which you need inputs for, as the time series might very
+                        'grad'
+                        'full-FORCE'
+
+        Outputs:
+            inp:        For input into network. Will have two columns (rhythm and trigger)
+            targ:       Target output. Four columns (one for each tap)
+            hints:      Hints for full-FORCE training. Three columns (one for each interval)
+            theta:      Stimulus angle
+            targ_idx:   Indices where target is specified
+            response_idx:   Index where response should be recorded
+            trigger_idx:    Start of response trigger
+            stim_idx:       Where the stimulus begins
+            delay_idx:      Where the delay begins
+
+Psychophysics.py: Script containing functions to measure relevant psychophysical metrics for various tasks.
+
+
+
+
+
+
+
+
+
+
